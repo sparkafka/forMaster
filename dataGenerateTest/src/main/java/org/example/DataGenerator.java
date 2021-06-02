@@ -47,7 +47,7 @@ public class DataGenerator {
             }
         }
         // key = 2 ~ 9
-        for (int i = 2; i <= 9; i++) {
+        for (int i = 2; i <= 10; i++) {
             int j;
             // 처음 10개: 번갈아가며 produce
             for (j = 1; j <= 10; j++) {
