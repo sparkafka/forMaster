@@ -9,7 +9,7 @@ import org.apache.kafka.common.TopicPartition;
 
 public class KeyConsumeTest {
     private static String consumeTopicName = "test-gener";
-    private static String produceTopicName = "test-check";
+    // private static String produceTopicName = "test-check";
 
     public static void main(String[] args) {
         // KafkaConsumer에 필요한 설정
@@ -23,12 +23,12 @@ public class KeyConsumeTest {
         Consumer<Integer, String> consumer = new KafkaConsumer<>(conf);
         consumer.subscribe(Collections.singletonList(consumeTopicName));
 
-        for(int count = 0; count < 1000; count++){
+        for(int count = 0; count < 100; count++){
             // 메시지를 수신하여 콘솔에 표시
             ConsumerRecords<Integer, String> records = consumer.poll(1);
             for(ConsumerRecord<Integer, String> record: records) {
-                String msgString = String.format("key:%d, value:%s, topic:%s, partition:%s",
-                        record.key(), record.value(), record.topic(), record.partition());
+                String msgString = String.format("value:%s, topic:%s, partition:%s",
+                        record.value(), record.topic(), record.partition());
                 System.out.println(msgString);
 
                 // 처리가 완료된 메시지의 오프셋을 커밋
