@@ -94,6 +94,8 @@ public class DataGenerator {
                     }
                 });
             }
+
+            // 나머지 출력
             for (;j<=90;j++){
                 key = i;
                 value = String.valueOf(i);

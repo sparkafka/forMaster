@@ -9,21 +9,30 @@ import org.apache.kafka.common.TopicPartition;
 
 public class KeyConsumeTest {
     private static String consumeTopicName = "test-gener";
-    // private static String produceTopicName = "test-check";
+    private static String produceTopicName = "test-check";
 
     public static void main(String[] args) {
         // KafkaConsumer에 필요한 설정
-        Properties conf = new Properties();
-        conf.setProperty("bootstrap.servers","node1:9092,node2:9092,node3:9092");
-        conf.setProperty("group.id", "TestGeneratorGroup");
-        conf.setProperty("enable.auto.commit", "false"); // offset commit
-        conf.setProperty("key.deserializer", "org.apache.kafka.common.serialization.IntegerDeserializer");
-        conf.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        Properties confConsume = new Properties();
+        confConsume.setProperty("bootstrap.servers","node1:9092,node2:9092,node3:9092");
+        confConsume.setProperty("group.id", "TestGeneratorGroup");
+        confConsume.setProperty("enable.auto.commit", "false"); // offset commit
+        confConsume.setProperty("key.deserializer", "org.apache.kafka.common.serialization.IntegerDeserializer");
+        confConsume.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
 
-        Consumer<Integer, String> consumer = new KafkaConsumer<>(conf);
+        Properties confProduce = new Properties();
+        confProduce.setProperty("bootstrap.servers","node1:9092,node2:9092,node3:9092");
+        confProduce.setProperty("key.serializer", "org.apache.kafka.common.serialization.IntegerSerializer");
+        confProduce.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+
+        Consumer<Integer, String> consumer = new KafkaConsumer<>(confConsume);
         consumer.subscribe(Collections.singletonList(consumeTopicName));
 
-        for(int count = 0; count < 100; count++){
+        Producer<Integer, String> producer = new KafkaProducer<>(confProduce);
+
+        int delayKey=1;
+        String delayValue;
+        for(int count = 0; count < 1000; count++){
             // 메시지를 수신하여 콘솔에 표시
             ConsumerRecords<Integer, String> records = consumer.poll(1);
             for(ConsumerRecord<Integer, String> record: records) {
@@ -31,6 +40,14 @@ public class KeyConsumeTest {
                         record.value(), record.topic(), record.partition());
                 System.out.println(msgString);
 
+                // delayKey와 key가 다르면 메시지 produce
+                if (record.key() > delayKey){
+                    delayKey = record.key();
+                    delayValue = String.valueOf(delayKey);
+                    ProducerRecord<Integer, String> producerRecord = new ProducerRecord<>(produceTopicName,
+                            delayKey, delayValue);
+                    producer.send(producerRecord);
+                }
                 // 처리가 완료된 메시지의 오프셋을 커밋
                 TopicPartition tp = new TopicPartition(record.topic(), record.partition());
                 OffsetAndMetadata oam = new OffsetAndMetadata(record.offset() + 1);
@@ -45,5 +62,6 @@ public class KeyConsumeTest {
         }
 
         consumer.close();
+        producer.close();
     }
 }
