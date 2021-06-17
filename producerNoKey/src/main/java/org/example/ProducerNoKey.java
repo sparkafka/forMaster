@@ -9,13 +9,14 @@ import java.util.Properties;
 import java.util.Random;
 
 public class ProducerNoKey {
-    private static String topicName = "test-gener";
+    private static String topicName = "input-stream";
+    private static String bootServers = "node1:9092,node2:9092,node3:9092,node4:9092";
 
     public static void main(String[] args) {
         Properties conf = new Properties();
         Random rand = new Random();
 
-        conf.setProperty("bootstrap.servers", "node1:9092,node2:9092,node3:9092");
+        conf.setProperty("bootstrap.servers", bootServers);
         conf.setProperty("key.serializer", "org.apache.kafka.common.serialization.IntegerSerializer");
         conf.setProperty("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
 
@@ -32,7 +33,7 @@ public class ProducerNoKey {
 
             // 파티션 랜덤 선택
             partition = rand.nextInt(4);
-            ProducerRecord<Integer, String> record = new ProducerRecord<>(topicName,partition,key,value);
+            ProducerRecord<Integer, String> record = new ProducerRecord<>(topicName,key,value);
 
             producer.send(record, new Callback() {
                 @Override
@@ -62,7 +63,7 @@ public class ProducerNoKey {
                 key = i;
                 value = String.valueOf(i);
                 partition = rand.nextInt(4);
-                ProducerRecord<Integer, String> record = new ProducerRecord<>(topicName,partition,key,value);
+                ProducerRecord<Integer, String> record = new ProducerRecord<>(topicName,key,value);
 
                 producer.send(record, new Callback() {
                     @Override
@@ -87,7 +88,7 @@ public class ProducerNoKey {
                 value = String.valueOf(key);
 
                 partition = rand.nextInt(4);
-                record = new ProducerRecord<>(topicName,partition,key,value);
+                record = new ProducerRecord<>(topicName,key,value);
 
                 producer.send(record, new Callback() {
                     @Override
@@ -114,7 +115,7 @@ public class ProducerNoKey {
                 value = String.valueOf(i);
 
                 partition = rand.nextInt(4);
-                ProducerRecord<Integer, String> record = new ProducerRecord<>(topicName,partition,key,value);
+                ProducerRecord<Integer, String> record = new ProducerRecord<>(topicName,key,value);
 
                 producer.send(record, new Callback() {
                     @Override
@@ -141,7 +142,7 @@ public class ProducerNoKey {
             key = 10;
             value = String.valueOf(key);
             partition = rand.nextInt(4);
-            ProducerRecord<Integer, String> record = new ProducerRecord<>(topicName,partition,key,value);
+            ProducerRecord<Integer, String> record = new ProducerRecord<>(topicName,key,value);
 
             producer.send(record, new Callback() {
                 @Override
