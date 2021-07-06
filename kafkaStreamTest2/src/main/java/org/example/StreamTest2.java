@@ -8,10 +8,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
-import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.Printed;
+import org.apache.kafka.streams.kstream.*;
 
 import java.util.Collections;
 import java.util.Properties;
@@ -20,6 +17,7 @@ public class StreamTest2 {
     private static String bootServers = "node1:9092,node2:9092,node3:9092,node4:9092";
     private static String consumeTopicName = "input-stream";
     public static void main(String[] args) {
+        int currentWindow = 1;
 
         Properties conf = new Properties();
         conf.put(StreamsConfig.APPLICATION_ID_CONFIG, "streaming-test-2");
@@ -45,6 +43,12 @@ public class StreamTest2 {
         //stream.print(Printed.toSysOut());
 
         stream.foreach((key, value) -> System.out.println(key + " " + value));
+        KStream<Integer, String>[] streamArr = stream.branch(
+                (key, value) -> key.equals(currentWindow),
+                (key, value) -> true
+        );
+        streamArr[0].to("on-time-stream");
+        //streamArr[1].
         Topology topology = builder.build();
         KafkaStreams streams = new KafkaStreams(topology, conf);
 
