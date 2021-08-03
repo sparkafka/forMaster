@@ -9,7 +9,7 @@ import java.util.Properties;
 import java.util.Random;
 
 public class ProducerNoKey {
-    private static String topicName = "input-stream";
+    private static String topicName = "topic1";
     private static String bootServers = "node1:9092,node2:9092,node3:9092,node4:9092";
 
     public static void main(String[] args) {

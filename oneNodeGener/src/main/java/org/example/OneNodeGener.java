@@ -21,18 +21,10 @@ public class OneNodeGener {
             for (int j = 1; j <= 100; j++) {
                 key = String.valueOf(i);
                 value = i;
-
+                System.out.println(key + " " + value);
                 ProducerRecord<String, Integer> record = new ProducerRecord<>(topicName, key, value);
-                producer.send(record, (recordMetadata, e) -> {
-                    if (recordMetadata != null) {
-                        String infoString = String.format("Success partition:%d, topic:%s",
-                                recordMetadata.partition(), recordMetadata.topic());
-                        System.out.println(infoString);
-                    } else {
-                        String infoString = String.format("Failed:%d", e.getMessage());
-                        System.err.println(infoString);
-                    }
-                });
+                producer.send(record);
+
                 try {
                     Thread.sleep(100);
                 } catch (InterruptedException e) {
@@ -40,7 +32,8 @@ public class OneNodeGener {
                 }
             }
         }
-
+        ProducerRecord<String, Integer> record = new ProducerRecord<>(topicName, "4", 0);
+        producer.send(record);
         producer.close();
     }
 }
