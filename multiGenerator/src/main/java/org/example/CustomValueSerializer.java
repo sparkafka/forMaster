@@ -18,9 +18,10 @@ public class CustomValueSerializer implements Serializer<CustomValue> {
         try {
             if (customValue == null) return null;
 
-            ByteBuffer buf = ByteBuffer.allocate(4 + 4 + 8 + 8);
+            ByteBuffer buf = ByteBuffer.allocate(4 + 4 + 4+8 + 8);
             buf.putInt(customValue.window);
             buf.putInt(customValue.value);
+            buf.putInt(customValue.nodeNum);
             buf.putLong(customValue.eventTime);
             buf.putLong(customValue.endTime);
 
