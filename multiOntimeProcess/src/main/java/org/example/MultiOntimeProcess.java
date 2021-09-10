@@ -4,10 +4,28 @@ import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.clients.producer.*;
 import org.apache.kafka.common.TopicPartition;
 
+import java.lang.reflect.Array;
 import java.time.Duration;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Properties;
+import java.util.*;
+
+
+class Pair {
+    private String key;
+    private int value;
+
+    Pair(String inputKey, int inputValue) {
+        this.key = inputKey;
+        this.value = inputValue;
+    }
+
+    public String getKey() {
+        return this.key;
+    }
+
+    public int getValue() {
+        return this.value;
+    }
+}
 
 public class MultiOntimeProcess {
     private static String FIRST_ONTIME_TM = "0";
@@ -16,7 +34,7 @@ public class MultiOntimeProcess {
     private static String ontimeTriggerTopic = "ontimeTriggerTopic";
     private static String onTopic1 = "ontimeTopic1";
     private static String onTopic2 = "ontimeTopic2";
-
+    private static String resultTopic = "ontimeResultTopic";
 
     public static void main(String[] args) {
         Properties consumeConf = new Properties();
@@ -36,117 +54,57 @@ public class MultiOntimeProcess {
 
         Producer<String, Integer> producer = new KafkaProducer<>(produceConf);
 
+        // consumer assign
+        consumer.subscribe(Arrays.asList(onTopic1, onTopic2, ontimeTriggerTopic));
+
+        // Store messages in memory
+        ArrayList<Pair> topic1Records = new ArrayList<>();
+        ArrayList<Pair> topic2Records = new ArrayList<>();
+
         boolean onTopicSelect = true;
         boolean trigSwitch = false;
 
-        for (int i = 0; i < 300; i++) {
-            consumer.subscribe(Collections.singletonList(ontimeTriggerTopic));
-//            consumer.assign(Collections.singletonList(new TopicPartition(ontimeTriggerTopic, 0)));
-//            consumer.assign(Collections.singletonList(new TopicPartition(ontimeTriggerTopic, 1)));
-//            consumer.assign(Collections.singletonList(new TopicPartition(ontimeTriggerTopic, 2)));
-//            consumer.assign(Collections.singletonList(new TopicPartition(ontimeTriggerTopic, 3)));
-            ConsumerRecords<String, Integer> tms = consumer.poll(Duration.ofMillis(10));
-            for (ConsumerRecord<String, Integer> tm : tms) {
+        for (int i = 0; i < 30000; i++) {
+            ConsumerRecords<String, Integer> records = consumer.poll(Duration.ofMillis(10));
+            for (ConsumerRecord<String, Integer> record : records) {
                 String msgString = String.format("key:%s, value:%d, topic:%s, partition:%d, offset:%d",
-                        tm.key(), tm.value(), tm.topic(), tm.partition(), tm.offset());
+                        record.key(), record.value(), record.topic(), record.partition(), record.offset());
                 System.out.println(msgString);
-                if (tm.key().equals(FIRST_ONTIME_TM)) {
+                if (record.topic().equals(ontimeTriggerTopic)) {
                     System.out.println("First on-time processing");
-                    if (onTopicSelect) {
-                        consumer.subscribe(Collections.singletonList(onTopic1));
-//                        consumer.assign(Collections.singletonList(new TopicPartition(onTopic1, 0)));
-//                        consumer.assign(Collections.singletonList(new TopicPartition(onTopic1, 1)));
-//                        consumer.assign(Collections.singletonList(new TopicPartition(onTopic1, 2)));
-//                        consumer.assign(Collections.singletonList(new TopicPartition(onTopic1, 3)));
+                    String recordWindow;
+                    int recordCount;
+                    if (onTopicSelect && !topic1Records.isEmpty()) {
+                        recordWindow = topic1Records.get(0).getKey();
+                        recordCount = topic1Records.size();
+                        topic1Records.clear();
+                        System.out.println(recordWindow + ": " + recordCount);
+//                        ProducerRecord<String, Integer> resultRecord = new ProducerRecord<>(resultTopic, recordWindow, recordCount);
+//                        producer.send(resultRecord);
+                        onTopicSelect = !onTopicSelect;
+                    } else if (!onTopicSelect && !topic2Records.isEmpty()) {
+                        recordWindow = topic2Records.get(0).getKey();
+                        recordCount = topic2Records.size();
+                        topic2Records.clear();
+                        System.out.println(recordWindow + ": " + recordCount);
+//                        ProducerRecord<String, Integer> resultRecord = new ProducerRecord<>(resultTopic, recordWindow, recordCount);
+//                        producer.send(resultRecord);
+                        onTopicSelect = !onTopicSelect;
+                    }
+                } else {
+                    if (record.topic().equals(onTopic1)) {
+                        topic1Records.add(new Pair(record.key(), record.value()));
                     } else {
-                        consumer.subscribe(Collections.singletonList(onTopic2));
-//                        consumer.assign(Collections.singletonList(new TopicPartition(onTopic2, 0)));
-//                        consumer.assign(Collections.singletonList(new TopicPartition(onTopic2, 1)));
-//                        consumer.assign(Collections.singletonList(new TopicPartition(onTopic2, 2)));
-//                        consumer.assign(Collections.singletonList(new TopicPartition(onTopic2, 3)));
-
+                        topic2Records.add(new Pair(record.key(), record.value()));
                     }
-                    HashMap<String, Integer> resultMap = new HashMap<>();
-                    ConsumerRecords<String, Integer> records = consumer.poll(Duration.ofMillis(10));
-                    while (records.isEmpty()) {
-                        records = consumer.poll(Duration.ofMillis(10));
-                    }
-                    for (ConsumerRecord<String, Integer> record : records) {
-                        String recordString = String.format("key:%s, value:%d, topic:%s, partition:%d, offset:%d",
-                                record.key(), record.value(), record.topic(), record.partition(), record.offset());
-                        System.out.println(recordString);
-                        if (!resultMap.containsKey(record.key())) {
-                            resultMap.put(record.key(), 1);
-                        } else {
-                            resultMap.put(record.key(), resultMap.get(record.key()) + 1);
-                        }
-                    }
-
-                    resultMap.forEach((window, count) -> {
-                        System.out.println(window + ": " + count);
-//                        ProducerRecord<String, Integer> results = new ProducerRecord<>(resultTopic, window, count);
-//                        producer.send(results);
-                    });
-                    onTopicSelect = !onTopicSelect;
                 }
             }
 
-            /*if (!trigSwitch) {
-                consumer.subscribe(Collections.singletonList(ontimeTriggerTopic));
-//                consumer.assign(Collections.singletonList(new TopicPartition(ontimeTriggerTopic, 0)));
-//                consumer.assign(Collections.singletonList(new TopicPartition(ontimeTriggerTopic, 1)));
-//                consumer.assign(Collections.singletonList(new TopicPartition(ontimeTriggerTopic, 2)));
-//                consumer.assign(Collections.singletonList(new TopicPartition(ontimeTriggerTopic, 3)));
-
-                ConsumerRecords<String, Integer> tms = consumer.poll(Duration.ofMillis(1));
-                for (ConsumerRecord<String, Integer> tm : tms) {
-                    if (tm.key().equals(FIRST_ONTIME_TM)) {
-                        System.out.println("First on-time processing");
-                        trigSwitch = true;
-//                        secondSwitch = false;
-//                        pTrigger = true;
-                    }
-                }
-            } else {
-                if (onTopicSelect) {
-                    consumer.subscribe(Collections.singletonList(onTopic1));
-//                    consumer.assign(Collections.singletonList(new TopicPartition(onTopic1, 0)));
-//                    consumer.assign(Collections.singletonList(new TopicPartition(onTopic1, 1)));
-//                    consumer.assign(Collections.singletonList(new TopicPartition(onTopic1, 2)));
-//                    consumer.assign(Collections.singletonList(new TopicPartition(onTopic1, 3)));
-                } else {
-                    consumer.subscribe(Collections.singletonList(onTopic2));
-//                    consumer.assign(Collections.singletonList(new TopicPartition(onTopic2, 0)));
-//                    consumer.assign(Collections.singletonList(new TopicPartition(onTopic2, 1)));
-//                    consumer.assign(Collections.singletonList(new TopicPartition(onTopic2, 2)));
-//                    consumer.assign(Collections.singletonList(new TopicPartition(onTopic2, 3)));
-                }
-                HashMap<String, Integer> resultMap = new HashMap<>();
-
-                ConsumerRecords<String, Integer> records = consumer.poll(Duration.ofMillis(1));
-                if (!records.isEmpty()) {
-                    for (ConsumerRecord<String, Integer> record : records) {
-                        if (!resultMap.containsKey(record.key())) {
-                            resultMap.put(record.key(), 1);
-                        } else {
-                            resultMap.put(record.key(), resultMap.get(record.key()) + 1);
-                        }
-                    }
-                    resultMap.forEach((window, count) -> {
-                        System.out.println(window + ": " + count);
-//                        ProducerRecord<String, Integer> results = new ProducerRecord<>(resultTopic, window, count);
-//                        producer.send(results);
-                    });
-                    trigSwitch = false;
-                    onTopicSelect = !onTopicSelect;
-                }
-            }*/
             try {
-                Thread.sleep(1000);
+                Thread.sleep(10);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
     }
 }
-

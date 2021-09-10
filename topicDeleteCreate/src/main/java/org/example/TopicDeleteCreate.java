@@ -16,25 +16,22 @@ public class TopicDeleteCreate {
         try (AdminClient adminClient = AdminClient.create(conf)) {
             ArrayList<String> deleteTopics = new ArrayList<>();
             deleteTopics.add("dataSource");
-            deleteTopics.add("ontimeTopic1");
-            deleteTopics.add("ontimeTopic2");
             deleteTopics.add("ontimeTriggerTopic");
             deleteTopics.add("ptimeTopic");
             deleteTopics.add("tmTopic");
+            deleteTopics.add("ontimeResultTopic");
 
             ArrayList<NewTopic> newTopics = new ArrayList<>();
             NewTopic newTopic1 = new NewTopic("dataSource",4, (short) 1);
-            NewTopic newTopic2 = new NewTopic("ontimeTopic1",4, (short) 1);
-            NewTopic newTopic3 = new NewTopic("ontimeTopic2",4, (short) 1);
-            NewTopic newTopic4 = new NewTopic("ontimeTriggerTopic",4, (short) 1);
-            NewTopic newTopic5 = new NewTopic("ptimeTopic",4, (short) 1);
-            NewTopic newTopic6 = new NewTopic("tmTopic",4, (short) 1);
+            NewTopic newTopic2 = new NewTopic("ontimeTriggerTopic",4, (short) 1);
+            NewTopic newTopic3 = new NewTopic("ptimeTopic",4, (short) 1);
+            NewTopic newTopic4 = new NewTopic("tmTopic",4, (short) 1);
+            NewTopic newTopic5 = new NewTopic("ontimeResultTopic",4, (short) 1);
             newTopics.add(newTopic1);
             newTopics.add(newTopic2);
             newTopics.add(newTopic3);
             newTopics.add(newTopic4);
             newTopics.add(newTopic5);
-            newTopics.add(newTopic6);
 
             adminClient.deleteTopics(deleteTopics);
             adminClient.createTopics(newTopics);
