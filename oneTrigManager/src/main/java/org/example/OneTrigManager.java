@@ -18,86 +18,119 @@ import java.util.Properties;
 // 4개의 다음 윈도우 데이터 들어왔을때
 // 일단 하나로만
 public class OneTrigManager {
-    private static int TRIGGER_COUNT = 1;
+    private static final int TRIGGER_COUNT = 1;
+    final private static int NODES = 1;
 
-    private static String trigTopic = "one-trig";
-    private static String prodTopic = "one-process";
-    private static String pSplitTopic = "one-psplit";
-    private static String bootServers = "node1:9092,node2:9092,node3:9092,node4:9092";
+    private static final String FIRST_ONTIME_TM = "F";
+    final private static String FIRST_ONTIME_COMPLETE = "C";
+    final private static String PTIME_COMPLETE = "P";
 
-    public static void main(String[] args) {
+    private static final String tmTopic = "tmTopic";
+    private static final String ontimeTriggerTopic = "ontimeTriggerTopic";
+    final private static String ptimeTriggerTopic = "ptimeTriggerTopic";
+    final private static String onResultTrigger = "ontimeResultTrigger";
+
+    private static final String bootServers = "node0:9092,node1:9092,node2:9092,node3:9092";
+
+    public static void main(String[] args) throws InterruptedException {
         Properties consumeConf = new Properties();
         consumeConf.setProperty("bootstrap.servers", bootServers);
-        consumeConf.setProperty("group.id", "OneFirstSplitter");
-        // conf.setProperty("enable.auto.commit", "false");
+        consumeConf.setProperty("group.id", "SingleTriggerManager");
+        consumeConf.setProperty("max.poll.records", "1");
         consumeConf.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
-        consumeConf.setProperty("value.deserializer", "org.apache.kafka.common.serialization.IntegerDeserializer");
-        Consumer<String, Integer> tmConsumer = new KafkaConsumer<>(consumeConf);
-        tmConsumer.subscribe(Collections.singletonList(trigTopic));
+        consumeConf.setProperty("value.deserializer", "org.example.CustomValueDeserializer");
+        Consumer<String, CustomValue> consumer = new KafkaConsumer<>(consumeConf);
+        consumer.subscribe(Collections.singletonList(tmTopic));
 
-        Properties proConf = new Properties();
-        proConf.setProperty("bootstrap.servers", bootServers);
-        proConf.setProperty("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-        proConf.setProperty("value.serializer", "org.apache.kafka.common.serialization.IntegerSerializer");
+        Properties produceConf = new Properties();
+        produceConf.setProperty("bootstrap.servers", bootServers);
+        produceConf.setProperty("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        produceConf.setProperty("value.serializer", "org.example.CustomValueSerializer");
 
-        Producer<String, Integer> tmProducer = new KafkaProducer<>(proConf);
+        Producer<String, CustomValue> producer = new KafkaProducer<>(produceConf);
 
-        // on-time, p-time 구분해서 tm 만들자
-        // true: on-time, false: p-time
-        boolean trigger = true;
+        // 현재 상태
+        int status = 0;
 
-        // 메시지는 다 여기서 처리할까?
-        // 0: first on-time process, 1: late on-time process,
-        // 2: p-time split,
+        // 현재 윈도우, 다음 윈도우
+        int currentWindow = 1;
+        int nextWindow = 1;
         int msg = 0;
-        int countFirstOnTime = 0;
-        int countLateOnTime = 0;
-        int countPTimeSplit = 0;
-        try {
-            while (true) {
-                ConsumerRecords<String, Integer> tms = tmConsumer.poll(Duration.ofMillis(1));
-                for (ConsumerRecord<String, Integer> tm : tms) {
-                    String msgString = String.format("key:%s, value:%d, topic:%s, partition:%d, offset:%d",
-                            tm.key(), tm.value(), tm.topic(), tm.partition(), tm.offset());
-                    System.out.println(msgString);
-                    if (tm.key().equals("first on-time tm")) {
-                        msg = 0;
-                        countFirstOnTime++;
-                    } else if (tm.key().equals("later on-time tm")) {
-                        msg = 1;
-                        countLateOnTime++;
-                    } else if (tm.key().equals("p-time split tm")) {
-                        msg = 2;
-                        countPTimeSplit++;
-                    }
-                }
-                // System.out.println("count: "+count);
-                if (msg == 0) {
-                    if (countFirstOnTime >= TRIGGER_COUNT) {
-                        System.out.println("count: " + countFirstOnTime);
-                        ProducerRecord<String, Integer> record = new ProducerRecord<>(prodTopic, "first on-time tm", 1);
-                        tmProducer.send(record);
-                        countFirstOnTime = 0;
-                    }
-                } else if (msg == 1) {
 
-                } else if (msg == 2) {
-                    if (countPTimeSplit >= TRIGGER_COUNT) {
-                        System.out.println("count: " + countPTimeSplit);
-                        ProducerRecord<String, Integer> record = new ProducerRecord<>(prodTopic, "first on-time tm", 1);
-                        tmProducer.send(record);
-                        countPTimeSplit = 0;
-                    }
+        // 받은 메시지 개수
+        // countFirstOnTime 이상이면 Triggering
+        int countFirstOnTime = 0;
+        int countOntimeComplete = 0;
+
+
+        while(true) {
+            ConsumerRecords<String, CustomValue> consumerRecords = consumer.poll(Duration.ofMillis(10));
+            for (ConsumerRecord<String, CustomValue> consumerRecord : consumerRecords) {
+                String consumeTm = consumerRecord.key();
+                int nodeWindow = consumerRecord.value().window;
+                int node = consumerRecord.value().value;
+                String msgString = String.format("key:%s, window:%d, node:%d", consumeTm, nodeWindow, node);
+                System.out.println(msgString);
+                switch (consumeTm) {
+                    case FIRST_ONTIME_TM:
+                        if (status == 0) {
+                            msg = 1;
+                            if (currentWindow < nodeWindow) {
+                                System.out.println("nodeWindow: " + nodeWindow + " currentWindow: " + currentWindow);
+                                countFirstOnTime++;
+                            }
+                            if (nextWindow < nodeWindow) {
+                                nextWindow = nodeWindow;
+                            }
+                            if (countFirstOnTime >= TRIGGER_COUNT) {
+                                status = 1;
+                                System.out.println("First on-time processing");
+                                CustomValue tm = new CustomValue(currentWindow, 0);
+                                ProducerRecord<String, CustomValue> record = new ProducerRecord<>(
+                                        ontimeTriggerTopic, 0, FIRST_ONTIME_TM, tm);
+                                producer.send(record);
+                                countFirstOnTime = 0;
+                                System.out.println("next window " + nextWindow);
+                            }
+                        }
+                        break;
+                    case FIRST_ONTIME_COMPLETE:
+                        if (status == 1) {
+                            msg = 2;
+                            countOntimeComplete++;
+                            if (countOntimeComplete >= TRIGGER_COUNT) {
+                                status = 2;
+                                System.out.println("First on-time processing complete");
+                                CustomValue tm = new CustomValue(currentWindow, 0);
+                                ProducerRecord<String, CustomValue> record = new ProducerRecord<>(
+                                        ontimeTriggerTopic, 0, FIRST_ONTIME_COMPLETE, tm);
+                                producer.send(record);
+                                record = new ProducerRecord<>(ptimeTriggerTopic, FIRST_ONTIME_COMPLETE, tm);
+                                producer.send(record);
+                                countOntimeComplete = 0;
+                                System.out.println("countFirstOnTime " + countFirstOnTime);
+                            }
+                        }
+                        break;
+                    case PTIME_COMPLETE:
+                        if (status == 2) {
+                            msg = 3;
+                            status = 0;
+                            System.out.println("p-time processing complete");
+                            currentWindow = nextWindow;
+                            CustomValue tm = new CustomValue(currentWindow, 0);
+                            ProducerRecord<String, CustomValue> record = new ProducerRecord<>(
+                                    ontimeTriggerTopic, 0, PTIME_COMPLETE, tm);
+                            producer.send(record);
+                            record = new ProducerRecord<>(ptimeTriggerTopic, PTIME_COMPLETE, tm);
+                            producer.send(record);
+                        }
+                        break;
+                    default:
                 }
-                /*try {
-                    Thread.sleep(10);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }*/
             }
-        } finally {
-            tmConsumer.close();
-            tmProducer.close();
+            Thread.sleep(1);
         }
+
     }
 }

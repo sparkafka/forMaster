@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.Properties;
 
 public class MultiTopicTest {
-    private static String bootServers = "node1:9092,node2:9092,node3:9092,node4:9092";
+    private static String bootServers = "node0:9092,node1:9092,node2:9092,node3:9092";
     private static String topic1 = "test1";
     private static String topic2 = "test2";
     public static void main(String[] args) {

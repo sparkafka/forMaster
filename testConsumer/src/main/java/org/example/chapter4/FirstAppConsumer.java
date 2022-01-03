@@ -14,23 +14,23 @@ public class FirstAppConsumer {
 
         // KafkaConsumer에 필요한 설정
         Properties conf = new Properties();
-        conf.setProperty("bootstrap.servers", "node1:9092,node2:9092,node3:9092,node4:9092");
+        conf.setProperty("bootstrap.servers", "node0:9092,node1:9092,node2:9092,node3:9092");
         conf.setProperty("group.id", "FirstAppConsumerGroup");
         //conf.setProperty("enable.auto.commit", "false");
-        conf.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
-        conf.setProperty("value.deserializer", "org.apache.kafka.common.serialization.IntegerDeserializer");
+        conf.setProperty("key.deserializer", "org.apache.kafka.common.serialization.IntegerDeserializer");
+        conf.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
 
         // 카프카 클러스터에서 메시지를 수신(Consume)하는 객체 생성
-        Consumer<String, Integer> consumer = new KafkaConsumer<>(conf);
+        Consumer<Integer, String> consumer = new KafkaConsumer<>(conf);
 
         // 구독(subscribe)하는 Topic 등록
         consumer.subscribe(Collections.singletonList(topicName));
 
         for (int count = 0; count < 30000; count++) {
             // 메시지를 수신하여 콘솔에 표시
-            ConsumerRecords<String, Integer> records = consumer.poll(10);
-            for (ConsumerRecord<String, Integer> record : records) {
-                String msgString = String.format("key:%s, value:%d, partition:%d offset:%d",
+            ConsumerRecords<Integer, String> records = consumer.poll(10);
+            for (ConsumerRecord<Integer, String> record : records) {
+                String msgString = String.format("key:%d, value:%s, partition:%d offset:%d",
                         record.key(), record.value(), record.partition(), record.offset());
                 System.out.println(msgString);
             }

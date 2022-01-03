@@ -7,8 +7,8 @@ import java.util.Collections;
 import java.util.Properties;
 
 public class CustomDeserializeTest {
-    final private static String bootServers = "node1:9092,node2:9092,node3:9092,node4:9092";
-    final private static String topic = "CustomTest";
+    final private static String bootServers = "node0:9092,node1:9092,node2:9092,node3:9092";
+    final private static String topic = "dataSource";
 
     public static void main(String[] args) {
         Properties prop2 = new Properties();

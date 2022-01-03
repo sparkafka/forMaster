@@ -7,7 +7,7 @@ import java.util.Random;
 
 public class MultiGenerator {
     final private static String topicName = "dataSource";
-    final private static String bootServers = "node1:9092,node2:9092,node3:9092,node4:9092";
+    final private static String bootServers = "node0:9092,node1:9092,node2:9092,node3:9092";
 
     final private static String DATA = "D";
 
@@ -73,6 +73,16 @@ public class MultiGenerator {
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
+            }
+        }
+        for (int i = 0; i < 4; i++) {
+            ProducerRecord<String, CustomValue> record = new ProducerRecord<>(topicName, i, DATA, new CustomValue(2, 0));
+            System.out.println("window:" + "2" + " value:" + 0);
+            producer.send(record);
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
         }
         for (int i = 0; i < 4; i++) {

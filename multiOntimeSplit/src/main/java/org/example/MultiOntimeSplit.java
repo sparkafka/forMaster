@@ -9,13 +9,13 @@ import java.util.*;
 
 // Store messages in memory and send the messages to process topic
 public class MultiOntimeSplit {
-    final private static int nodeNum = 1;
+//    final private static int nodeNum = 1;
 //    final private static int nodeNum = 2;
 //    final private static int nodeNum = 3;
-//    final private static int nodeNum = 4;
+    final private static int nodeNum = 4;
 
     final private static String DATA = "D";
-    final private static String FIRST_ONTIME_TM = "O";
+    final private static String FIRST_ONTIME_TM = "F";
     final private static String FIRST_ONTIME_COMPLETE = "C";
     final private static String PTIME_COMPLETE = "P";
 
@@ -29,10 +29,6 @@ public class MultiOntimeSplit {
     final private static String tmTopic = "tmTopic";
     final private static String onResultTopic = "ontimeResultTopic";
 
-    // Store messages in memory
-    static ArrayList<CustomValue> topic1Records = new ArrayList<>();
-    static ArrayList<CustomValue> topic2Records = new ArrayList<>();
-
     public static Consumer<String, CustomValue> getConsumer() {
         Consumer<String, CustomValue> consumer;
 
@@ -45,11 +41,8 @@ public class MultiOntimeSplit {
         consumer = new KafkaConsumer<>(consumeConf);
 //        consumer.subscribe(Arrays.asList(dataSource, ontimeTriggerTopic));
         List<TopicPartition> partitions = Arrays.asList(
-                new TopicPartition(dataSource, nodeNum - 1),
-                new TopicPartition(ontimeTriggerTopic, nodeNum - 1)/*,
-                new TopicPartition(ontimeTriggerTopic+nodeNum-1, 1),
-                new TopicPartition(ontimeTriggerTopic+nodeNum-1, 2),
-                new TopicPartition(ontimeTriggerTopic+nodeNum-1, 3)*/);
+                new TopicPartition(dataSource, nodeNum-1),
+                new TopicPartition(ontimeTriggerTopic, nodeNum-1));
         consumer.assign(partitions);
         return consumer;
     }
@@ -63,25 +56,26 @@ public class MultiOntimeSplit {
         return new KafkaProducer<>(produceConf);
     }
 
-    public static int count(ArrayList<CustomValue> records) {
-        return records.size();
-    }
-
-    public static void main(String[] args) {
-//        Random rand = new Random();
+    public static void main(String[] args) throws InterruptedException {
         Consumer<String, CustomValue> consumer = getConsumer();
 
         Producer<String, CustomValue> producer = getProducer();
 
-        boolean onTopicSelect = true; // on-time Topic 선택 true:1, false:2
-        boolean ptimeWatermark = false; // p-time watermark true: p-time, false: on-time
-        boolean onTrigger = false;  // on-time 처리중
+        boolean pTimeMark = false; // p-time watermark true: p-time, false: on-time
+        boolean onTimeProcessing = false;  // on-time 처리중
 
+        // 0: 온타임 데이터 - 피타임 프로세싱 완료
+        // 1: 피타임 시작 - 아직 온타임 프로세싱 X
+        // 2: 온타임 프로세싱 중
+        // 3: 온타임 프로세싱 완료 - 아직 피타임
+        byte status = 0;
+        boolean ptime = false;
         int currentWindow = 1;
         String key;
         CustomValue cValue;
 
-        for (int i = 0; i < 30000; i++) {
+        // On time Data는 On time Topic으로, P time Data는 P time Topic으로
+        while(true) {
             int recordWindow;
             ConsumerRecords<String, CustomValue> records = consumer.poll(Duration.ofMillis(10));
             for (ConsumerRecord<String, CustomValue> record : records) {
@@ -92,199 +86,75 @@ public class MultiOntimeSplit {
                 // 첫 on-time 프로세스
                 switch (record.key()) {
                     case FIRST_ONTIME_TM:
-                        int resultWindow;
-                        int resultCount;
-                        Long resultEventTime;
                         // Immediate processing and send to on-time result topic
-                        // 1번 array 처리중
-                        if (onTopicSelect) {
-                            // 현재 p-time
-                            // 1번 처리중(p-time)에 on-time data 처리 요청이 들어오면 그때까지 2번 array에 저장된 데이터 처리
-                            if (ptimeWatermark) {
-                                if (!topic2Records.isEmpty()) {
-                                    System.out.println("Topic2 Triggering");
-                                    onTrigger = true;
-                                    resultWindow = topic2Records.get(0).window();
-                                    resultEventTime = topic2Records.get(0).eventTime; // 첫 데이터의 eventTime
-                                    // Count 하기
-                                    resultCount = count(topic2Records);
-                                    topic2Records.clear();
-
-                                    CustomValue data = new CustomValue(resultWindow, resultCount, nodeNum, resultEventTime, 0L);
-                                    ProducerRecord<String, CustomValue> ontimeResultRecord = new ProducerRecord<>(onResultTopic, DATA, data);
-                                    producer.send(ontimeResultRecord);
-
-                                    CustomValue tm = new CustomValue(resultWindow, nodeNum);
-                                    producerRecord = new ProducerRecord<>(tmTopic, FIRST_ONTIME_COMPLETE, tm);
-                                    producer.send(producerRecord);
-
-                                    System.out.println("window: " + resultWindow + " count: " + resultCount);
-                                }
-                            } else { // 현재 on-time
-                                if (!topic1Records.isEmpty()) {
-                                    System.out.println("Topic1 Triggering");
-                                    onTrigger = true; // On-time data 처리중
-                                    ptimeWatermark = true; // P-time 으로 변경
-                                    resultWindow = topic1Records.get(0).window();
-                                    resultEventTime = topic1Records.get(0).eventTime;
-                                    resultCount = count(topic1Records);
-                                    topic1Records.clear();
-
-                                    CustomValue data = new CustomValue(resultWindow, resultCount, nodeNum, resultEventTime, 0L);
-                                    ProducerRecord<String, CustomValue> ontimeResultRecord = new ProducerRecord<>(onResultTopic, DATA, data);
-                                    producer.send(ontimeResultRecord);
-
-                                    CustomValue tm = new CustomValue(resultWindow, nodeNum);
-                                    producerRecord = new ProducerRecord<>(tmTopic, FIRST_ONTIME_COMPLETE, tm);
-                                    producer.send(producerRecord);
-
-                                    System.out.println("window: " + resultWindow + " count: " + resultCount);
-                                }
-                            }
-                        } else { // 2번 array 처리중
-                            // 현재 p-time
-                            // 2번 처리중(p-time)에 on-time data 처리 요청이 들어오면 그때까지 1번 array에 저장된 데이터 처리
-                            if (ptimeWatermark) {
-                                if (!topic1Records.isEmpty()) {
-                                    System.out.println("Topic1 Triggering");
-                                    onTrigger = true;
-                                    resultWindow = topic1Records.get(0).window();
-                                    resultEventTime = topic1Records.get(0).eventTime;
-                                    resultCount = count(topic1Records);
-                                    topic1Records.clear();
-
-                                    CustomValue data = new CustomValue(resultWindow, resultCount, nodeNum, resultEventTime, 0L);
-                                    ProducerRecord<String, CustomValue> ontimeResultRecord = new ProducerRecord<>(onResultTopic, DATA, data);
-                                    producer.send(ontimeResultRecord);
-
-                                    CustomValue tm = new CustomValue(resultWindow, nodeNum);
-                                    producerRecord = new ProducerRecord<>(tmTopic, FIRST_ONTIME_COMPLETE, tm);
-                                    producer.send(producerRecord);
-
-                                    System.out.println("window: " + resultWindow + " count: " + resultCount);
-                                }
-                            } else { // 현재 on-time
-                                if (!topic2Records.isEmpty()) {
-                                    System.out.println("Topic2 Triggering");
-                                    onTrigger = true;
-                                    ptimeWatermark = true;
-                                    resultWindow = topic2Records.get(0).window();
-                                    resultEventTime = topic2Records.get(0).eventTime;
-                                    // Count 하기
-                                    resultCount = count(topic2Records);
-                                    topic2Records.clear();
-
-                                    CustomValue data = new CustomValue(resultWindow, resultCount, nodeNum, resultEventTime, 0L);
-                                    ProducerRecord<String, CustomValue> ontimeResultRecord = new ProducerRecord<>(onResultTopic, DATA, data);
-                                    producer.send(ontimeResultRecord);
-
-                                    CustomValue tm = new CustomValue(resultWindow, nodeNum);
-                                    producerRecord = new ProducerRecord<>(tmTopic, FIRST_ONTIME_COMPLETE, tm);
-                                    producer.send(producerRecord);
-
-                                    System.out.println("window: " + resultWindow + " count: " + resultCount);
-                                }
-                            }
-                        }
+                        System.out.println("On-time Processing");
+                        ptime = true;
+                        ProducerRecord<String, CustomValue> ontimeTrigger = new ProducerRecord<>(
+                                onTopic1,nodeNum-1 ,FIRST_ONTIME_TM, record.value());
+                        producer.send(ontimeTrigger);
                         break;
                     case FIRST_ONTIME_COMPLETE:
-                        System.out.println("First Ontime complete!");
-                        onTrigger = false;
+                        System.out.println("First On-time Processing complete!");
+                        ptime = false;
                         break;
                     case PTIME_COMPLETE:
                         // When the first processing ends
-                        System.out.println("Processing complete!");
-                        ptimeWatermark = false;
+                        System.out.println("Entire Processing complete!");
+                        ptime = false;
+                        System.out.print("Window changed: " + currentWindow + " to ");
                         currentWindow = record.value().window;
+                        System.out.println(currentWindow);
+                        ProducerRecord<String, CustomValue> ptimeComplete = new ProducerRecord<>(
+                                onTopic1, nodeNum-1 ,PTIME_COMPLETE, record.value());
+                        producer.send(ptimeComplete);
                         break;
-                    default:
+                    case DATA:
                         key = record.key();
                         cValue = record.value();
 
                         recordWindow = cValue.window;
                         // 레코드 윈도우가 현재 윈도우보다 작으면 p-time topic으로 보내기
                         if (recordWindow < currentWindow) {
+                            System.out.println("p-time data-key: " + key + " window: " + cValue.window + " value: " + cValue.value);
+                            cValue.setEventTime(record.timestamp());
                             producerRecord = new ProducerRecord<>(pTopic, DATA, cValue);
-                            producer.send(producerRecord, (recordMetadata, e) -> {
-                                if (recordMetadata != null) {
-                                    // 송신에 성공한 경우
-                                    String infoString = String.format("Success topic:%s partition:%d, offset:%d",
-                                            recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset());
-                                    System.out.println(infoString);
-                                } else {
-                                    // 송신에 실패한 경우
-                                    String infoString = String.format("Failed:%s", e.getMessage());
-                                    System.err.println(infoString);
-                                }
-                            });
                         } else { // recordWindow >= currentWindow
                             // 레코드 윈도우가 현재 윈도우보다 크면 트리거 메시지 전송
-                            if (recordWindow > currentWindow) {
-                                // on-time 처리중이 아닐때만 tm 전송
-                                if (!onTrigger) {
-                                    // value: 다음에 처리할 window와 tm이라는 뜻의 -1
-                                    System.out.println("Send TM");
-                                    CustomValue tm = new CustomValue(recordWindow, -1);
-                                    producerRecord = new ProducerRecord<>(tmTopic, FIRST_ONTIME_TM, tm);
-                                    producer.send(producerRecord);
-                                }
-                                // p-time이 아니면 데이터를 저장중인 array 바꾸기
-                                if (!ptimeWatermark) {
-                                    onTopicSelect = !onTopicSelect;
-                                    ptimeWatermark = true;
-                                }
+                            if (recordWindow > currentWindow && !ptime) {
+
+                                // value: 지금 처리할 window, 현재 노드번호
+                                System.out.println("Send TM");
+                                CustomValue tm = new CustomValue(recordWindow, nodeNum);
+                                producerRecord = new ProducerRecord<>(tmTopic, FIRST_ONTIME_TM, tm);
+                                producer.send(producerRecord);
                             }
                             // p-time 일때
-                            if (ptimeWatermark) {
+                            if (ptime) {
                                 // currentWindow == recordWindow면 일단 ptime topic으로 보내기
                                 if (recordWindow == currentWindow) {
+                                    System.out.println("p-time data-key: " + key + " window: " + cValue.window + " value: " + cValue.value);
+                                    cValue.setEventTime(record.timestamp());
                                     producerRecord = new ProducerRecord<>(pTopic, DATA, cValue);
-                                    producer.send(producerRecord, (recordMetadata, e) -> {
-                                        if (recordMetadata != null) {
-                                            // 송신에 성공한 경우
-                                            String infoString = String.format("Success topic:%s partition:%d, offset:%d",
-                                                    recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset());
-                                            System.out.println(infoString);
-                                        } else {
-                                            // 송신에 실패한 경우
-                                            String infoString = String.format("Failed:%s", e.getMessage());
-                                            System.err.println(infoString);
-                                        }
-                                    });
                                 } else {
-                                    // recordWindow > currentWindow 이면 on-time array에 저장
-                                    if (onTopicSelect) {
-                                        System.out.println("key: " + key + " topic1 " + cValue.window + " " + cValue.value);
-                                        cValue.setEventTime(record.timestamp());
-                                        topic1Records.add(cValue);
-                                    } else {
-                                        System.out.println("key: " + key + " topic2 " + cValue.window + " " + cValue.value);
-                                        cValue.setEventTime(record.timestamp());
-                                        topic2Records.add(cValue);
-                                    }
+                                    // recordWindow > currentWindow 이면 on-time topic에 전송
+                                    System.out.println("on-time data-key: " + key + " window: " + cValue.window + " value: " + cValue.value);
+                                    cValue.setEventTime(record.timestamp());
+                                    producerRecord = new ProducerRecord<>(onTopic1, nodeNum-1, DATA, cValue);
                                 }
                             } else { // on-time 일때
-                                // 레코드 윈도우가 현재 윈도우보다 크거나 같으면 on-time array에 저장
-                                if (onTopicSelect) {
-                                    System.out.println("on-time key: " + key + " topic1 " + cValue.window + " " + cValue.value);
-                                    cValue.setEventTime(record.timestamp());
-                                    topic1Records.add(cValue);
-                                } else {
-                                    System.out.println("on-time key: " + key + " topic2 " + cValue.window + " " + cValue.value);
-                                    cValue.setEventTime(record.timestamp());
-                                    topic2Records.add(cValue);
-                                }
+                                // 레코드 윈도우가 현재 윈도우보다 크거나 같으면 on-time topic에 전송
+                                System.out.println("on-time data-key: " + key + " window: " + cValue.window + " value: " + cValue.value);
+                                cValue.setEventTime(record.timestamp());
+                                producerRecord = new ProducerRecord<>(onTopic1, nodeNum-1, DATA, cValue);
                             }
                         }
+                        producer.send(producerRecord);
+                        break;
                 }
             }
-            try {
-                Thread.sleep(1);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+
+            Thread.sleep(1);
+
         }
-        consumer.close();
-        producer.close();
     }
 }

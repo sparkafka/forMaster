@@ -10,9 +10,9 @@ import java.util.Properties;
 import java.util.Random;
 
 public class ProduceWindow {
-    private static String produceTopicName = "input-stream";
+    private static String produceTopicName = "dataSource";
     private static String consumeTopicName = "current-window";
-    private static String bootServers = "node1:9092,node2:9092,node3:9092,node4:9092";
+    private static String bootServers = "node0:9092,node1:9092,node2:9092,node3:9092";
 
     public static void main(String[] args) {
         int currentWindow = 1;
@@ -41,7 +41,7 @@ public class ProduceWindow {
 
 
         for (int i=1;i<=100;i++) {
-            records = consumer.poll(10);
+            /*records = consumer.poll(10);
             if (records != null){
                 for(ConsumerRecord<Integer, String> record : records){
                     String windowValue = record.value();
@@ -53,7 +53,7 @@ public class ProduceWindow {
                     Map<TopicPartition, OffsetAndMetadata> commitInfo = Collections.singletonMap(tp, oam);
                     consumer.commitSync(commitInfo);
                 }
-            }
+            }*/
             String value = String.valueOf(i);
             ProducerRecord<Integer, String> producerRecord = new ProducerRecord<>(produceTopicName, currentWindow, value);
             producer.send(producerRecord, (recordMetadata, e) -> {
@@ -62,12 +62,12 @@ public class ProduceWindow {
                             recordMetadata.partition(), recordMetadata.offset());
                     System.out.println(infoString);
                 } else {
-                    String infoString = String.format("Failed:%d", e.getMessage());
+                    String infoString = String.format("Failed:%s", e.getMessage());
                     System.err.println(infoString);
                 }
             });
             try{
-                Thread.sleep(1000);
+                Thread.sleep(10);
             } catch (InterruptedException e){
                 e.printStackTrace();
             }
